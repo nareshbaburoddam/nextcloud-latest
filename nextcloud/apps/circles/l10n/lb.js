@@ -1,0 +1,21 @@
+OC.L10N.register(
+    "circles",
+    {
+    "Personal" : "Perséinlech",
+    "Visible" : "Visibel",
+    "Password protected" : "Passwuertgeschützt",
+    "Hidden" : "Verstoppt",
+    "Federated" : "Federated",
+    "Admin" : "Admin",
+    "Owner" : "Owner",
+    "Files" : "Dateien",
+    "Invalid image" : "Ongülteg d'Bild",
+    "Unknown filetype" : "Onbekannten Fichier Typ",
+    "Loading…" : "Et gëtt gelueden",
+    "No files in here" : "Keng Dokumenter hei",
+    "No entries found in this folder" : "Keng Elementer an dësem Dossier fonnt",
+    "Name" : "Numm",
+    "Size" : "Gréisst",
+    "Modified" : "Geännert"
+},
+"nplurals=2; plural=(n != 1);");
