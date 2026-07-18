@@ -44,3 +44,6 @@ RUN apt-get update && apt-get install -y \
 
 # Enable Apache mods
 RUN a2enmod rewrite headers env dir mime
+
+COPY ../nextcloud/ /var/www/html/nextcloud/
+RUN chown -R www-data:www-data /var/www/html/nextcloud

@@ -1,18 +1,13 @@
 version: '3.8'
-
 services:
   web:
-    build:
-      context: ./php
-      dockerfile: Dockerfile
+    image: nareshbaburoddam/nextcloud-php:latest
     container_name: apache_php
     ports:
       - "8080:80"
-    volumes:
-      - ./nextcloud:/var/www/html/nextcloud
     depends_on:
       - db
-
+    restart: unless-stopped
   db:
     image: mariadb:10.6
     container_name: mariadb
@@ -24,7 +19,5 @@ services:
       MYSQL_PASSWORD: nextcloud
     volumes:
       - db_data:/var/lib/mysql
-
 volumes:
   db_data:
-
