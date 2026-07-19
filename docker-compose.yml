@@ -18,6 +18,4 @@ services:
       MYSQL_USER: nextcloud
       MYSQL_PASSWORD: nextcloud
     volumes:
-      - db_data:/var/lib/mysql
-volumes:
-  db_data:
+      - ./db_data:/var/lib/mysql
