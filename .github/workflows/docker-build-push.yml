@@ -93,6 +93,9 @@ jobs:
     if: ${{ github.event.inputs.deploy == 'true' }}
     runs-on: self-hosted
     steps:
+      - name: Fix permissions on data folder
+        run: sudo chown -R $(whoami):$(whoami) . || true
+
       - name: Checkout code
         uses: actions/checkout@v4
 
