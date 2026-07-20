@@ -3,6 +3,18 @@ name: CI/CD Nextcloud
 on:
   workflow_dispatch:
     inputs:
+      major:
+        description: 'Major version'
+        required: true
+        default: '1'
+      minor:
+        description: 'Minor version'
+        required: true
+        default: '0'
+      patch:
+        description: 'Patch version'
+        required: true
+        default: '0'
       environment:
         description: 'Environment'
         required: true
@@ -20,6 +32,7 @@ on:
 
 env:
   BUILD_NUMBER: ${{ github.run_number }}
+  VERSION: "${{ github.event.inputs.major }}.${{ github.event.inputs.minor }}.${{ github.event.inputs.patch }}.${{ github.run_number }}"
   IMAGE_NAME: nareshbaburoddam/nextcloud-php-${{ github.event.inputs.environment }}
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -50,7 +63,7 @@ jobs:
           cache-to: type=gha,mode=max
           tags: |
             ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ env.BUILD_NUMBER }}
+            ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
 
       - name: 🧹 Keep only latest 2 image tags on Docker Hub
         run: |
@@ -58,34 +71,26 @@ jobs:
           NAMESPACE="${REPO%%/*}"
           REPO_NAME="${REPO#*/}"
 
-          echo "🔐 Getting Docker Hub auth token..."
           TOKEN=$(curl -s -X POST https://hub.docker.com/v2/users/login/ \
             -H "Content-Type: application/json" \
             -d "{\"username\": \"${{ env.DOCKERHUB_USERNAME }}\", \"password\": \"${{ env.DOCKERHUB_TOKEN }}\"}" \
             | jq -r .token)
 
-          echo "🔍 Fetching tags for $NAMESPACE/$REPO_NAME ..."
           TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
             "https://hub.docker.com/v2/repositories/$NAMESPACE/$REPO_NAME/tags/?page_size=100&ordering=last_updated" \
             | jq -r '.results[] | select(.name != "latest") | .name')
 
           TAG_COUNT=$(echo "$TAGS" | grep -c . || true)
-          echo "📦 Numbered tags found: $TAG_COUNT"
-
           if [ "$TAG_COUNT" -le 2 ]; then
             echo "✅ Only $TAG_COUNT numbered tags exist, nothing to delete."
             exit 0
           fi
 
           DELETE_TAGS=$(echo "$TAGS" | tail -n +3)
-          echo "🗑️ Deleting old tags:"
-          echo "$DELETE_TAGS"
-
           for tag in $DELETE_TAGS; do
             echo "Deleting tag: $tag ..."
             curl -s -X DELETE -H "Authorization: JWT $TOKEN" \
               "https://hub.docker.com/v2/repositories/$NAMESPACE/$REPO_NAME/tags/$tag/"
-            echo "✅ Deleted: $tag"
           done
 
   deploy:
