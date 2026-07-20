@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   web:
-    image: ${IMAGE_NAME:-nareshbaburoddam/nextcloud-php-dev}:latest
+    image: ${IMAGE_NAME:-ghcr.io/nareshbaburoddam/nextcloud-php-dev}:latest
     container_name: apache_php
     ports:
       - "8080:80"
