@@ -106,7 +106,7 @@ pipeline {
                 sh '''
                     sleep 10
                     docker ps
-                    curl -f http://localhost:8080 || exit 1
+                    curl -f http://localhost:82 || exit 1
                 '''
             }
         }
