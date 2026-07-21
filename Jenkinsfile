@@ -1,57 +1,126 @@
 pipeline {
-    // Run this pipeline on the slave node with this label
-    // (Set the label under: Manage Jenkins > Nodes > <your node> > Labels)
-    agent { label 'slave-133' }
+    agent any
 
     parameters {
-        string(name: 'GIT_REPO', defaultValue: 'https://github.com/nareshbaburoddam/nextcloud-latest.git', description: 'GitHub repo URL')
-        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Branch to build')
-        string(name: 'COMPOSE_FILE', defaultValue: 'docker-compose.yml', description: 'Path to compose file inside the repo')
+        string(name: 'MAJOR', defaultValue: '1', description: 'Major version')
+        string(name: 'MINOR', defaultValue: '0', description: 'Minor version')
+        string(name: 'PATCH', defaultValue: '0', description: 'Patch version')
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'qa', 'prod'], description: 'Target environment')
+        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy after build?')
     }
 
-    options {
-        timestamps()
-        disableConcurrentBuilds()
+    environment {
+        REGISTRY = 'ghcr.io'
+        OWNER = 'nareshbaburoddam'
+        IMAGE_NAME = "nextcloud-php-${params.ENVIRONMENT}"
+        VERSION = "${params.MAJOR}.${params.MINOR}.${params.PATCH}.${env.BUILD_NUMBER}"
+        FULL_IMAGE = "${REGISTRY}/${OWNER}/${IMAGE_NAME}"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: "${params.GIT_BRANCH}",
-                    url: "${params.GIT_REPO}",
-                    credentialsId: 'nareshbaburoddam-git-creds'
-                    // 'nareshbaburoddam-git-creds' must match the ID of the credential you
-                    // added under Manage Jenkins > Credentials
+                checkout scm
             }
         }
 
-        stage('Verify Tools') {
+        stage('Log in to GHCR') {
             steps {
-                sh 'docker --version'
-                sh 'docker compose version || docker-compose --version'
+                withCredentials([usernamePassword(
+                    credentialsId: 'ghcr-credentials',
+                    usernameVariable: 'GHCR_USER',
+                    passwordVariable: 'GHCR_TOKEN'
+                )]) {
+                    sh 'echo $GHCR_TOKEN | docker login ghcr.io -u $GHCR_USER --password-stdin'
+                }
             }
         }
 
-        stage('Compose Up') {
+        stage('Build Image') {
             steps {
-                sh "docker compose -f ${params.COMPOSE_FILE} up -d --build"
+                sh """
+                    docker build -t ${FULL_IMAGE}:latest -t ${FULL_IMAGE}:${VERSION} -f ./php/Dockerfile .
+                """
             }
         }
 
-        stage('Status') {
+        stage('Push Image') {
             steps {
-                sh "docker compose -f ${params.COMPOSE_FILE} ps"
+                sh """
+                    docker push ${FULL_IMAGE}:latest
+                    docker push ${FULL_IMAGE}:${VERSION}
+                """
+            }
+        }
+
+        stage('Cleanup Old Versions') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'ghcr-credentials',
+                    usernameVariable: 'GHCR_USER',
+                    passwordVariable: 'GHCR_TOKEN'
+                )]) {
+                    sh """
+                        VERSIONS=\$(curl -s -H "Authorization: Bearer \$GHCR_TOKEN" \
+                            -H "Accept: application/vnd.github+json" \
+                            "https://api.github.com/users/${OWNER}/packages/container/${IMAGE_NAME}/versions?per_page=100")
+
+                        COUNT=\$(echo "\$VERSIONS" | jq 'length')
+                        echo "Total versions found: \$COUNT"
+
+                        if [ "\$COUNT" -le 2 ]; then
+                            echo "Only \$COUNT versions exist, nothing to delete."
+                        else
+                            IDS_TO_DELETE=\$(echo "\$VERSIONS" | jq -r 'sort_by(.created_at) | reverse | .[2:] | .[].id')
+                            for id in \$IDS_TO_DELETE; do
+                                echo "Deleting version id: \$id"
+                                curl -s -X DELETE -H "Authorization: Bearer \$GHCR_TOKEN" \
+                                    -H "Accept: application/vnd.github+json" \
+                                    "https://api.github.com/users/${OWNER}/packages/container/${IMAGE_NAME}/versions/\$id"
+                            done
+                        fi
+                    """
+                }
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                expression { params.DEPLOY == true }
+            }
+            steps {
+                sh """
+                    export IMAGE_NAME=${FULL_IMAGE}
+                    docker compose down
+                    docker compose pull
+                    docker compose up -d
+                """
+            }
+        }
+
+        stage('Verify') {
+            when {
+                expression { params.DEPLOY == true }
+            }
+            steps {
+                sh '''
+                    sleep 10
+                    docker ps
+                    curl -f http://localhost:8080 || exit 1
+                '''
             }
         }
     }
 
     post {
+        success {
+            echo "✅ Build ${VERSION} succeeded for ${params.ENVIRONMENT}"
+        }
         failure {
-            echo 'Pipeline failed — tearing down any partially started containers.'
-            sh "docker compose -f ${params.COMPOSE_FILE} down || true"
+            echo "❌ Pipeline failed. Check logs above."
         }
         always {
-            echo "Build finished with status: ${currentBuild.currentResult}"
+            sh 'docker logout ghcr.io || true'
         }
     }
 }
