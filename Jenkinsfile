@@ -93,14 +93,14 @@ pipeline {
             }
             steps {
                 withCredentials([string(credentialsId: 'teams-webhook-url', variable: 'TEAMS_WEBHOOK')]) {
-                    sh """
-                        curl -H 'Content-Type: application/json' -d '{
+                    script {
+                        def payload = """
+                        {
                             "type": "message",
                             "attachments": [
                                 {
                                     "contentType": "application/vnd.microsoft.card.adaptive",
                                     "content": {
-                                        "\\\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                                         "type": "AdaptiveCard",
                                         "version": "1.4",
                                         "body": [
@@ -126,14 +126,17 @@ pipeline {
                                     }
                                 }
                             ]
-                        }' "\$TEAMS_WEBHOOK"
-                    """
+                        }
+                        """
+                        writeFile file: 'teams_payload.json', text: payload
+                        sh 'curl -H "Content-Type: application/json" -d @teams_payload.json "$TEAMS_WEBHOOK"'
+                    }
                 }
                 timeout(time: 30, unit: 'MINUTES') {
                     input(
                         message: "Approve deployment of ${VERSION} to PRODUCTION?",
                         ok: 'Deploy',
-                        submitter: 'gururaj'
+                        submitter: 'nareshbaburoddam'
                     )
                 }
             }
