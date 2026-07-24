@@ -84,6 +84,24 @@ pipeline {
             }
         }
 
+        stage('Approval') {
+            when {
+                allOf {
+                    expression { params.DEPLOY == true }
+                    expression { params.ENVIRONMENT == 'prod' }
+                }
+            }
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    input(
+                        message: "Approve deployment of ${VERSION} to PRODUCTION?",
+                        ok: 'Deploy',
+                        submitter: 'gururaj'
+                    )
+                }
+            }
+        }
+
         stage('Deploy') {
             when {
                 expression { params.DEPLOY == true }
@@ -91,6 +109,7 @@ pipeline {
             steps {
                 sh """
                     export IMAGE_NAME=${FULL_IMAGE}
+                    export IMAGE_TAG=${VERSION}
                     docker compose down
                     docker compose pull
                     docker compose up -d
