@@ -121,6 +121,7 @@ jobs:
         run: |
           export IMAGE_NAME=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           export IMAGE_TAG=${{ env.VERSION }}
+          sleep 20
           docker compose down
           docker compose pull
           docker compose up -d
