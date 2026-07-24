@@ -136,7 +136,7 @@ pipeline {
                     input(
                         message: "Approve deployment of ${VERSION} to PRODUCTION?",
                         ok: 'Deploy',
-                        submitter: 'nareshbaburoddam'
+                        submitter: 'gururaj'
                     )
                 }
             }
