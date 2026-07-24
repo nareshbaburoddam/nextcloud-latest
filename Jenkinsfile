@@ -92,6 +92,43 @@ pipeline {
                 }
             }
             steps {
+                withCredentials([string(credentialsId: 'teams-webhook-url', variable: 'TEAMS_WEBHOOK')]) {
+                    sh """
+                        curl -H 'Content-Type: application/json' -d '{
+                            "type": "message",
+                            "attachments": [
+                                {
+                                    "contentType": "application/vnd.microsoft.card.adaptive",
+                                    "content": {
+                                        "\\\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                                        "type": "AdaptiveCard",
+                                        "version": "1.4",
+                                        "body": [
+                                            {
+                                                "type": "TextBlock",
+                                                "text": "Approval needed: Deploy ${VERSION} to PRODUCTION",
+                                                "weight": "bolder",
+                                                "size": "medium"
+                                            },
+                                            {
+                                                "type": "TextBlock",
+                                                "text": "Click below to review and approve.",
+                                                "wrap": true
+                                            }
+                                        ],
+                                        "actions": [
+                                            {
+                                                "type": "Action.OpenUrl",
+                                                "title": "Review in Jenkins",
+                                                "url": "${env.BUILD_URL}"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }' "\$TEAMS_WEBHOOK"
+                    """
+                }
                 timeout(time: 30, unit: 'MINUTES') {
                     input(
                         message: "Approve deployment of ${VERSION} to PRODUCTION?",
