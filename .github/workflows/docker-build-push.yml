@@ -71,46 +71,32 @@ jobs:
       - name: 🧹 Keep only latest 2 image versions on GHCR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
         run: |
-          PACKAGE_NAME="petclinic-${{ github.event.inputs.environment }}"
+          PACKAGE_NAME="nextcloud-php-${{ github.event.inputs.environment }}"
           OWNER="${{ github.repository_owner }}"
 
+          echo "🔍 Fetching versions for $PACKAGE_NAME ..."
           VERSIONS=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/users/$OWNER/packages/container/$PACKAGE_NAME/versions?per_page=100")
 
-          # Only consider versions that actually carry a tag (skip untagged attestation/manifest blobs)
-          TAGGED_VERSIONS=$(echo "$VERSIONS" | jq '[.[] | select(.metadata.container.tags | length > 0)]')
-          COUNT=$(echo "$TAGGED_VERSIONS" | jq 'length')
-          echo "📦 Tagged versions found: $COUNT"
+          COUNT=$(echo "$VERSIONS" | jq 'length')
+          echo "📦 Total versions found: $COUNT"
 
           if [ "$COUNT" -le 2 ]; then
-            echo "✅ Only $COUNT tagged versions exist, nothing to delete."
-          else
-            IDS_TO_DELETE=$(echo "$TAGGED_VERSIONS" | jq -r 'sort_by(.created_at) | reverse | .[2:] | .[].id')
-            echo "🗑️ Deleting old tagged versions:"
-            for id in $IDS_TO_DELETE; do
-              echo "Deleting version id: $id"
-              curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
-                -H "Accept: application/vnd.github+json" \
-                "https://api.github.com/users/$OWNER/packages/container/$PACKAGE_NAME/versions/$id"
-            done
+            echo "✅ Only $COUNT versions exist, nothing to delete."
+            exit 0
           fi
 
-          # Untagged versions (attestation/manifest leftovers) are never useful - always clean these up
-          UNTAGGED_IDS=$(echo "$VERSIONS" | jq -r '.[] | select(.metadata.container.tags | length == 0) | .id')
-          if [ -n "$UNTAGGED_IDS" ]; then
-            echo "🗑️ Deleting untagged versions:"
-            for id in $UNTAGGED_IDS; do
-              echo "Deleting untagged version id: $id"
-              curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
-                -H "Accept: application/vnd.github+json" \
-                "https://api.github.com/users/$OWNER/packages/container/$PACKAGE_NAME/versions/$id"
-            done
-          else
-            echo "✅ No untagged versions to clean up."
-          fi
+          IDS_TO_DELETE=$(echo "$VERSIONS" | jq -r 'sort_by(.created_at) | reverse | .[2:] | .[].id')
+
+          for id in $IDS_TO_DELETE; do
+            echo "Deleting version id: $id ..."
+            curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/users/$OWNER/packages/container/$PACKAGE_NAME/versions/$id"
+            echo "✅ Deleted: $id"
+          done
 
   deploy:
     needs: build
