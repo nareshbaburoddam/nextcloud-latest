@@ -101,7 +101,7 @@ jobs:
   deploy:
     needs: build
     if: ${{ github.event.inputs.deploy == 'true' }}
-    runs-on: self-hosted
+    runs-on: [self-hosted, aws-ec2]
     environment: ${{ github.event.inputs.environment == 'prod' && 'production' || 'no-approval-needed' }}
     steps:
       - name: Fix permissions on data folder
