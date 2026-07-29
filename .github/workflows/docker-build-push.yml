@@ -80,28 +80,44 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/users/$OWNER/packages/container/$PACKAGE_NAME/versions?per_page=100")
 
-          COUNT=$(echo "$VERSIONS" | jq 'length')
-          echo "📦 Total versions found: $COUNT"
+          # Only consider versions that actually carry a tag (skip untagged attestation/manifest blobs)
+          TAGGED_VERSIONS=$(echo "$VERSIONS" | jq '[.[] | select(.metadata.container.tags | length > 0)]')
+          COUNT=$(echo "$TAGGED_VERSIONS" | jq 'length')
+          echo "📦 Tagged versions found: $COUNT"
 
           if [ "$COUNT" -le 2 ]; then
-            echo "✅ Only $COUNT versions exist, nothing to delete."
-            exit 0
+            echo "✅ Only $COUNT tagged versions exist, nothing to delete."
+          else
+            IDS_TO_DELETE=$(echo "$TAGGED_VERSIONS" | jq -r 'sort_by(.created_at) | reverse | .[2:] | .[].id')
+            echo "🗑️  Deleting old tagged versions:"
+            for id in $IDS_TO_DELETE; do
+              echo "Deleting version id: $id"
+              curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/users/$OWNER/packages/container/$PACKAGE_NAME/versions/$id"
+              echo "✅ Deleted: $id"
+            done
           fi
 
-          IDS_TO_DELETE=$(echo "$VERSIONS" | jq -r 'sort_by(.created_at) | reverse | .[2:] | .[].id')
-
-          for id in $IDS_TO_DELETE; do
-            echo "Deleting version id: $id ..."
-            curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/users/$OWNER/packages/container/$PACKAGE_NAME/versions/$id"
-            echo "✅ Deleted: $id"
-          done
+          # Untagged versions (attestation/manifest leftovers) are never useful - always clean these up
+          UNTAGGED_IDS=$(echo "$VERSIONS" | jq -r '.[] | select(.metadata.container.tags | length == 0) | .id')
+          if [ -n "$UNTAGGED_IDS" ]; then
+            echo "🗑️  Deleting untagged versions:"
+            for id in $UNTAGGED_IDS; do
+              echo "Deleting untagged version id: $id"
+              curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/users/$OWNER/packages/container/$PACKAGE_NAME/versions/$id"
+              echo "✅ Deleted untagged: $id"
+            done
+          else
+            echo "✅ No untagged versions to clean up."
+          fi
 
   deploy:
     needs: build
     if: ${{ github.event.inputs.deploy == 'true' }}
-    runs-on: self-hosted
+    runs-on: [self-hosted,aws-ec2]
     environment: ${{ github.event.inputs.environment == 'prod' && 'production' || 'no-approval-needed' }}
     steps:
       - name: Fix permissions on data folder
@@ -122,6 +138,8 @@ jobs:
           export IMAGE_NAME=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           export IMAGE_TAG=${{ env.VERSION }}
           sleep 20
+          docker image rm -f $IMAGE_NAME:$IMAGE_TAG || true
+          docker system prune -f
           docker compose down
           docker compose pull
           docker compose up -d
