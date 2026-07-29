@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'slave-133' }
+    agent any
 
     parameters {
         string(name: 'MAJOR', defaultValue: '1', description: 'Major version')
