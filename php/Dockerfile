@@ -43,11 +43,11 @@ FROM php:8.2-apache
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6 \
     libjpeg62-turbo \
-    libpng16-16 \
-    libzip4 \
+    libpng16-16t64 \
+    libzip5 \
     libxml2 \
-    libicu72 \
-    libmagickwand-6.q16-6 \
+    libicu76 \
+    libmagickwand-7.q16-10 \
     libonig5 \
     libcurl4 \
     libbz2-1.0 \
